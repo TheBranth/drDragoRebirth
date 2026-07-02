@@ -1,40 +1,61 @@
 export default class Player {
-    constructor(name, startNodeId, character) {
+    constructor(name, startNodeIndex, character) {
         this.name = name;
-        this.money = 1000 * (character.startMoneyModifier || 1);
+        this.character = character;
+        this.money = 30000 * (character.startMoneyModifier || 1);
         this.car = { speed: 3, condition: 100 };
-        this.currentNodeId = startNodeId;
+        this.currentNodeIndex = typeof startNodeIndex === 'number' ? startNodeIndex : 399;
         this.shares = [];
-        this.passiveAbility = character.getAbility();
+        this.passiveAbility = character.getAbility ? character.getAbility() : null;
+        
+        // Movement tracking
+        this.movesRemaining = 0;
+        this.pathHistory = [this.currentNodeIndex];
     }
 
-    move(board, newNodeId) {
-        const targetNode = board.findNodeById(newNodeId);
-        if (targetNode) {
-            this.currentNodeId = newNodeId;
-            console.log(`${this.name} moved to ${targetNode.name}.`);
-        } else {
-            console.error(`Node with ID ${newNodeId} not found.`);
-        }
+    startTurn(moves) {
+        this.movesRemaining = moves;
+        this.pathHistory = [this.currentNodeIndex];
     }
 
-    buyCar(newCar) {
-        if (this.money >= newCar.price) {
-            this.money -= newCar.price;
-            this.car = { speed: newCar.speed, condition: 100 };
-            console.log(`${this.name} bought a ${newCar.name} for ${newCar.price}.`);
-        } else {
-            console.log(`${this.name} cannot afford the ${newCar.name}.`);
+    /**
+     * Move to a neighboring node index.
+     * Handles forward movement and backward undo/refund.
+     * @param {number} neighborIndex 
+     * @param {Board} board 
+     * @returns {boolean} true if movement was successful
+     */
+    moveTo(neighborIndex, board) {
+        const currentNode = board.findNodeById(this.currentNodeIndex);
+        if (!currentNode) return false;
+
+        // Check if neighborIndex is actually connected
+        if (!currentNode.neighbors.includes(neighborIndex)) {
+            return false;
         }
+
+        // Check if we are backtracking to the previous node in the history
+        if (this.pathHistory.length > 1 && neighborIndex === this.pathHistory[this.pathHistory.length - 2]) {
+            // Undo: refund move
+            this.movesRemaining++;
+            this.pathHistory.pop();
+            this.currentNodeIndex = neighborIndex;
+            return true;
+        }
+
+        // Otherwise, we move forward if we have moves remaining
+        if (this.movesRemaining > 0) {
+            this.movesRemaining--;
+            this.pathHistory.push(neighborIndex);
+            this.currentNodeIndex = neighborIndex;
+            return true;
+        }
+
+        return false;
     }
 
-    buyShares(cityId, sharePrice) {
-        if (this.money >= sharePrice) {
-            this.money -= sharePrice;
-            this.shares.push(cityId);
-            console.log(`${this.name} bought shares in ${cityId} for ${sharePrice}.`);
-        } else {
-            console.log(`${this.name} cannot afford shares in ${cityId}.`);
-        }
+    confirmMove() {
+        this.pathHistory = [this.currentNodeIndex];
+        this.movesRemaining = 0;
     }
 }
