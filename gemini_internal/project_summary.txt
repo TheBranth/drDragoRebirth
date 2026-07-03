@@ -40,9 +40,9 @@ Current Status:
 - Added a modern glassmorphic facts popup window when players land on sightseeing nodes.
 - Generated and integrated a new modern, high-fidelity vintage parchment Europe map scaled to the 740-node grid coordinates.
 - Programmatically rendered all node connections in `GameScene.js`, separating land roads (solid brown lines) from water routes (dashed light-blue lines) by reading connection `flight` values in the JSON database.
+- Completed Option 1 (Core Gameplay & Economy): implemented city properties, monopolies, passive rent collection, Feature Cards drawing and action events, stage targets, Dr. Drago haunting, and hot-potato curse passing.
+- Covered with a comprehensive node-level integration test suite (`test_gameplay.js`) verifying property transactions, monopoly doubling, card actions, stage wins, and haunting penalties.
 
 Next Steps (Proposed Plan):
-1. Flesh out the Economic System (buying/selling properties and shares, passive income, and monopoly bonuses).
-2. Implement Feature Cards (loading them from `cardlist.js`, UI for hand selection, playing card effects).
-3. Implement Dr. Drago's negative event triggers and hot-potato haunting movement.
-4. Implement Online Multiplayer support (Create/Join Session lobby system).
+1. Implement Online Multiplayer support (Create/Join Session lobby system).
+2. Implement Autosave / Save Game System.

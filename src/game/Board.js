@@ -6,6 +6,32 @@ export default class Board {
         this.nodes = JSON.parse(JSON.stringify(GRAPH)); // Deep clone to avoid mutating original module
         this.views = VIEWS;
         this.initViews();
+        this.initProperties();
+    }
+
+    initProperties() {
+        const standardNames = ["Local Shop", "Factory", "Municipal Bank"];
+        const capitalNames = ["Grand Palace", "National Treasury", "Embassy Headquarters"];
+
+        this.nodes.forEach(node => {
+            if (node.type === 'city') {
+                node.properties = standardNames.map(name => ({
+                    name: name,
+                    cost: 15000,
+                    rent: 1500,
+                    owner: null // Name of the owning player
+                }));
+            } else if (node.type === 'capital') {
+                node.properties = capitalNames.map(name => ({
+                    name: name,
+                    cost: 45000,
+                    rent: 4500,
+                    owner: null
+                }));
+            } else {
+                node.properties = [];
+            }
+        });
     }
 
     initViews() {
@@ -128,5 +154,37 @@ export default class Board {
         }
 
         return Array.from(possibleMoves);
+    }
+
+    /**
+     * Calculates the shortest path distance (number of edges) between two nodes.
+     * @param {number} fromIndex 
+     * @param {number} toIndex 
+     * @returns {number} shortest distance (number of steps)
+     */
+    getShortestPathDistance(fromIndex, toIndex) {
+        if (fromIndex === toIndex) return 0;
+
+        const queue = [{ nodeIndex: fromIndex, distance: 0 }];
+        const visited = new Set([fromIndex]);
+
+        while (queue.length > 0) {
+            const { nodeIndex, distance } = queue.shift();
+
+            if (nodeIndex === toIndex) {
+                return distance;
+            }
+
+            const currentNode = this.findNodeById(nodeIndex);
+            if (currentNode) {
+                for (const neighborIndex of currentNode.neighbors) {
+                    if (neighborIndex !== null && !visited.has(neighborIndex)) {
+                        visited.add(neighborIndex);
+                        queue.push({ nodeIndex: neighborIndex, distance: distance + 1 });
+                    }
+                }
+            }
+        }
+        return 999; // Fallback for unreachable
     }
 }

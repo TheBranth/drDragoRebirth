@@ -1,4 +1,4 @@
-import Game from '../game/Game.js';
+import Game, { CARD_TEMPLATES } from '../game/Game.js';
 import Characters from '../game/Characters.js';
 
 export default class GameScene extends Phaser.Scene {
@@ -38,24 +38,22 @@ export default class GameScene extends Phaser.Scene {
         this.cameras.main.centerOn(pragueX, pragueY);
         this.cameras.main.setZoom(1);
 
-        // --- DRAW NODE GLOW & CONNECTIONS ---
+        // --- DRAW CONNECTIONS ---
         const connectionGraphics = this.add.graphics();
-
         nodes.forEach((node, index) => {
             const px = node.x * 16 + 8;
             const py = node.y * 16 + 8;
 
-            // Draw connections to neighbors (only draw forward links to avoid duplicates)
             node.neighbors.forEach((neighborIndex, dir) => {
                 if (neighborIndex !== null && neighborIndex > index) {
                     const neighbor = board.findNodeById(neighborIndex);
                     if (neighbor) {
                         const isWater = node.flight[dir] === 1;
                         if (isWater) {
-                            connectionGraphics.lineStyle(2.5, 0x3498db, 0.75); // Dashed light blue line
+                            connectionGraphics.lineStyle(2.5, 0x3498db, 0.75); // Dashed light blue
                             this.drawDashedLine(connectionGraphics, px, py, neighbor.x * 16 + 8, neighbor.y * 16 + 8, 8, 6);
                         } else {
-                            connectionGraphics.lineStyle(3, 0x8c6d58, 0.55); // Solid brown line
+                            connectionGraphics.lineStyle(3, 0x8c6d58, 0.55); // Solid brown road
                             connectionGraphics.beginPath();
                             connectionGraphics.moveTo(px, py);
                             connectionGraphics.lineTo(neighbor.x * 16 + 8, neighbor.y * 16 + 8);
@@ -65,6 +63,10 @@ export default class GameScene extends Phaser.Scene {
                 }
             });
         });
+
+        // --- TARGET CAPITAL GLOW MARKER ---
+        this.targetGlow = this.add.graphics();
+        this.updateTargetCapitalMarker();
 
         // --- DRAW DYNAMIC NODES ---
         this.nodeMarkers = [];
@@ -83,11 +85,11 @@ export default class GameScene extends Phaser.Scene {
             const py = node.y * 16 + 8;
             const color = typeColors[node.type] || 0xffffff;
 
-            let size = node.type === 'capital' ? 7 : (node.type === 'city' ? 6 : 4);
+            let size = node.type === 'capital' ? 8 : (node.type === 'city' ? 6 : 4);
             const circle = this.add.circle(px, py, size, color, 0.9);
             circle.setStrokeStyle(1.5, 0xffffff, 0.7);
 
-            // Add interactivity to nodes
+            // Node hover interactivity
             circle.setInteractive({ useHandCursor: true });
             circle.on('pointerover', () => {
                 this.nodeLabel.setText(node.name ? `${node.name} (${node.type.toUpperCase()})` : `Space (${node.type.toUpperCase()})`);
@@ -109,12 +111,11 @@ export default class GameScene extends Phaser.Scene {
             const py = startNode.y * 16 + 8;
 
             const playerContainer = this.add.container(px, py);
-            const body = this.add.circle(0, 0, 10, playerColors[idx], 1);
+            const body = this.add.circle(0, 0, 12, playerColors[idx], 1);
             body.setStrokeStyle(2, 0xffffff, 1);
             
-            // Add a visual indicator showing the player's initials
             const text = this.add.text(0, 0, player.name.substring(0, 2).toUpperCase(), {
-                fontSize: '10px',
+                fontSize: '11px',
                 color: '#ffffff',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
@@ -125,16 +126,17 @@ export default class GameScene extends Phaser.Scene {
 
         // --- DRAGO SPRITE ---
         const dragoNode = board.findNodeById(this.game.dragoPosition);
-        this.dragoSprite = this.add.circle(dragoNode.x * 16 + 8, dragoNode.y * 16 + 8, 9, 0xff0000, 0.8);
-        this.dragoSprite.setStrokeStyle(2, 0xffff00, 1);
-        const dragoText = this.add.text(dragoNode.x * 16 + 8, dragoNode.y * 16 + 8, 'DR', {
-            fontSize: '9px',
+        this.dragoContainer = this.add.container(dragoNode.x * 16 + 8, dragoNode.y * 16 + 8);
+        const dragoBody = this.add.circle(0, 0, 11, 0xff0000, 0.9);
+        dragoBody.setStrokeStyle(2.5, 0xffff00, 1);
+        const dragoText = this.add.text(0, 0, 'DR', {
+            fontSize: '10px',
             color: '#ffffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
-        this.dragoText = dragoText;
+        this.dragoContainer.add([dragoBody, dragoText]);
 
-        // --- CAMERA CONTROLS (PAN & ZOOM) ---
+        // --- CAMERA PAN & ZOOM ---
         this.input.on('pointermove', pointer => {
             if (!pointer.isDown) return;
             this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
@@ -143,14 +145,15 @@ export default class GameScene extends Phaser.Scene {
 
         this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
             let newZoom = this.cameras.main.zoom - deltaY * 0.001;
-            newZoom = Phaser.Math.Clamp(newZoom, 0.5, 3.0);
+            newZoom = Phaser.Math.Clamp(newZoom, 0.4, 2.5);
             this.cameras.main.setZoom(newZoom);
         });
 
-        // --- KEYBOARD INPUT FOR INTERACTIVE MOVEMENT ---
-        this.cursors = this.input.keyboard.createCursorKeys();
+        // --- KEYBOARD ARROW MOVEMENT ---
         this.input.keyboard.on('keydown', event => {
             const currentPlayer = this.game.players[this.game.currentPlayerIndex];
+            
+            // Only allow movement if player has rolled and has moves left OR can backtrack
             if (currentPlayer.movesRemaining > 0 || currentPlayer.pathHistory.length > 1) {
                 let direction = -1;
                 if (event.key === 'ArrowUp') direction = 0;
@@ -168,7 +171,7 @@ export default class GameScene extends Phaser.Scene {
             }
         });
 
-        // --- MODERN UI PANEL ---
+        // --- HUD & INTERFACE ---
         this.setupUI();
 
         // --- START GAME ---
@@ -179,13 +182,14 @@ export default class GameScene extends Phaser.Scene {
 
     setupUI() {
         const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
 
-        // Floating Header Status Bar (Glassmorphism look)
+        // Floating Header (Status panel)
         const headerBg = this.add.graphics();
-        headerBg.fillStyle(0x111625, 0.85);
-        headerBg.fillRoundedRect(20, 20, 480, 80, 12);
-        headerBg.lineStyle(1.5, 0xffffff, 0.15);
-        headerBg.strokeRoundedRect(20, 20, 480, 80, 12);
+        headerBg.fillStyle(0x111625, 0.9);
+        headerBg.fillRoundedRect(20, 20, 520, 90, 12);
+        headerBg.lineStyle(2, 0x8c6d58, 0.4);
+        headerBg.strokeRoundedRect(20, 20, 520, 90, 12);
         headerBg.setScrollFactor(0);
 
         this.statusText = this.add.text(40, 32, 'Initializing Game...', {
@@ -195,21 +199,28 @@ export default class GameScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setScrollFactor(0);
 
-        this.movesText = this.add.text(40, 62, 'Roll the dice to start moving.', {
+        this.movesText = this.add.text(40, 58, 'Roll dice to start moving.', {
             fontSize: '14px',
             color: '#a0aec0',
             fontFamily: 'Arial'
         }).setScrollFactor(0);
 
+        this.playerBalanceText = this.add.text(40, 80, '', {
+            fontSize: '13px',
+            color: '#00ff66',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setScrollFactor(0);
+
         // Control Panel
         const controlBg = this.add.graphics();
-        controlBg.fillStyle(0x111625, 0.85);
-        controlBg.fillRoundedRect(20, 120, 200, 180, 12);
-        controlBg.lineStyle(1.5, 0xffffff, 0.15);
-        controlBg.strokeRoundedRect(20, 120, 200, 180, 12);
+        controlBg.fillStyle(0x111625, 0.9);
+        controlBg.fillRoundedRect(20, 130, 200, 190, 12);
+        controlBg.lineStyle(2, 0x8c6d58, 0.4);
+        controlBg.strokeRoundedRect(20, 130, 200, 190, 12);
         controlBg.setScrollFactor(0);
 
-        this.rollButton = this.add.text(40, 140, '🎲 Roll Dice', {
+        this.rollButton = this.add.text(40, 150, '🎲 Roll Dice', {
             fontSize: '20px',
             color: '#00ff66',
             backgroundColor: '#1d273a',
@@ -223,19 +234,43 @@ export default class GameScene extends Phaser.Scene {
           .on('pointerover', () => this.rollButton.setStyle({ color: '#ffffff', backgroundColor: '#28364f' }))
           .on('pointerout', () => this.rollButton.setStyle({ color: '#00ff66', backgroundColor: '#1d273a' }));
 
-        this.endTurnButton = this.add.text(40, 220, '🏁 Confirm Turn', {
+        this.endTurnButton = this.add.text(40, 230, '🏁 Confirm Turn', {
             fontSize: '18px',
             color: '#a0aec0',
             backgroundColor: '#161d2d',
             padding: { x: 14, y: 8 },
             fontFamily: 'Arial',
             fontStyle: 'bold'
-        }).setOrigin(0)
-          .setScrollFactor(0);
+        }).setOrigin(0).setScrollFactor(0);
+
+        // Compass HUD (Top Right)
+        this.compassContainer = this.add.container(width - 150, 70).setScrollFactor(0);
+        const compassBg = this.add.graphics();
+        compassBg.fillStyle(0x111625, 0.9);
+        compassBg.fillCircle(0, 0, 45);
+        compassBg.lineStyle(2.5, 0x8c6d58, 0.5);
+        compassBg.strokeCircle(0, 0, 45);
+
+        this.compassNeedle = this.add.graphics();
+        this.compassNeedle.fillStyle(0xff4757, 1); // Red arrow tip
+        this.compassNeedle.fillTriangle(0, -35, -7, -10, 7, -10);
+        this.compassNeedle.fillStyle(0x7f8c8d, 1); // Gray tail
+        this.compassNeedle.fillTriangle(0, 35, -7, 10, 7, 10);
+
+        this.compassText = this.add.text(0, 55, '', {
+            fontSize: '12px',
+            color: '#ffffff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            backgroundColor: '#111625',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(0.5);
+
+        this.compassContainer.add([compassBg, this.compassNeedle, this.compassText]);
 
         // Hover Node Label
         this.nodeLabel = this.add.text(width / 2, 40, '', {
-            fontSize: '16px',
+            fontSize: '15px',
             color: '#ffffff',
             backgroundColor: '#111625',
             padding: { x: 12, y: 6 },
@@ -243,48 +278,104 @@ export default class GameScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0.5).setScrollFactor(0).setVisible(false);
 
-        // Sightseeing FACT modal UI (hidden by default)
-        this.factModal = this.add.container(width / 2, this.cameras.main.height / 2).setScrollFactor(0).setVisible(false);
-        const modalBack = this.add.graphics();
-        modalBack.fillStyle(0x0e131f, 0.95);
-        modalBack.fillRoundedRect(-300, -150, 600, 300, 16);
-        modalBack.lineStyle(2, 0x00a8ff, 0.8);
-        modalBack.strokeRoundedRect(-300, -150, 600, 300, 16);
-
-        this.factTitle = this.add.text(0, -110, 'SIGHTSEEING LANDMARK', {
-            fontSize: '22px',
-            color: '#00a8ff',
+        // Card Drawer UI (Fixed Bottom Panel)
+        this.cardDrawer = this.add.container(width / 2, height - 85).setScrollFactor(0);
+        this.cardDrawerBg = this.add.graphics();
+        this.cardDrawerBg.fillStyle(0x0e131f, 0.92);
+        this.cardDrawerBg.fillRoundedRect(-400, -50, 800, 100, 16);
+        this.cardDrawerBg.lineStyle(2, 0x8c6d58, 0.4);
+        this.cardDrawerBg.strokeRoundedRect(-400, -50, 800, 100, 16);
+        
+        this.cardDrawerTitle = this.add.text(0, -42, 'FEATURE CARD HAND', {
+            fontSize: '11px',
+            color: '#a0aec0',
             fontFamily: 'Arial',
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        this.factDesc = this.add.text(0, -40, '', {
+        this.cardButtonsContainer = this.add.container(0, 5);
+        this.cardDrawer.add([this.cardDrawerBg, this.cardDrawerTitle, this.cardButtonsContainer]);
+
+        // Dynamic Modals Container
+        this.modalOverlay = this.add.container(0, 0).setScrollFactor(0).setVisible(false);
+        const overlayBg = this.add.graphics();
+        overlayBg.fillStyle(0x000000, 0.65);
+        overlayBg.fillRect(0, 0, width, height);
+
+        this.modalBox = this.add.container(width / 2, height / 2);
+        const boxBg = this.add.graphics();
+        boxBg.fillStyle(0x111625, 0.98);
+        boxBg.fillRoundedRect(-280, -180, 560, 360, 16);
+        boxBg.lineStyle(2.5, 0x8c6d58, 0.6);
+        boxBg.strokeRoundedRect(-280, -180, 560, 360, 16);
+
+        this.modalTitle = this.add.text(0, -140, '', {
+            fontSize: '22px',
+            color: '#ffffff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        this.modalBody = this.add.text(0, -80, '', {
             fontSize: '15px',
-            color: '#e2e8f0',
+            color: '#cbd5e0',
             fontFamily: 'Arial',
             align: 'center',
-            wordWrap: { width: 520, useAdvancedWrap: true }
+            wordWrap: { width: 500 }
         }).setOrigin(0.5);
 
-        const closeBtn = this.add.text(0, 90, 'CLOSE', {
-            fontSize: '16px',
-            color: '#ffffff',
-            backgroundColor: '#00a8ff',
-            padding: { x: 24, y: 10 },
-            fontFamily: 'Arial',
-            fontStyle: 'bold'
-        }).setOrigin(0.5)
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => this.closeFactModal());
+        this.modalButtons = this.add.container(0, 20);
 
-        this.factModal.add([modalBack, this.factTitle, this.factDesc, closeBtn]);
+        this.modalBox.add([boxBg, this.modalTitle, this.modalBody, this.modalButtons]);
+        this.modalOverlay.add([overlayBg, this.modalBox]);
+    }
+
+    updateTargetCapitalMarker() {
+        this.targetGlow.clear();
+        if (this.game.targetCapitalIndex === null) return;
+
+        const board = this.game.board;
+        const targetNode = board.findNodeById(this.game.targetCapitalIndex);
+        if (targetNode) {
+            const tx = targetNode.x * 16 + 8;
+            const ty = targetNode.y * 16 + 8;
+
+            this.targetGlow.lineStyle(2, 0xffd700, 0.85); // Pulsing Gold ring
+            this.targetGlow.strokeCircle(tx, ty, 15);
+            
+            // Add a pulsating tween effect
+            this.tweens.add({
+                targets: this.targetGlow,
+                alpha: { from: 1, to: 0.2 },
+                duration: 1200,
+                yoyo: true,
+                repeat: -1
+            });
+        }
     }
 
     rollDicePhase() {
         this.rollButton.disableInteractive().setAlpha(0.3);
         const result = this.game.startTurn();
-        this.updateUIStatus();
-        this.highlightNeighbors();
+
+        if (result.skipped) {
+            // Player turn skipped
+            this.showEventModal('TURN SKIPPED', `${result.player.name}'s turn is skipped due to a freeze effect!`, () => {
+                this.finishTurn();
+            });
+            return;
+        }
+
+        // Check if Drago event occurred
+        if (result.dragoEvent) {
+            this.showEventModal('DR. DRAGO SABOTAGE!', result.dragoEvent.msg, () => {
+                this.updateUIStatus();
+                this.highlightNeighbors();
+            });
+        } else {
+            this.updateUIStatus();
+            this.highlightNeighbors();
+        }
     }
 
     handleStepMove(direction) {
@@ -294,9 +385,8 @@ export default class GameScene extends Phaser.Scene {
         if (!currentNode) return;
 
         const targetNodeIndex = currentNode.neighbors[direction];
-        if (targetNodeIndex === null) return; // No path in that direction
+        if (targetNodeIndex === null) return; // No connection
 
-        const oldNodeIndex = currentPlayer.currentNodeIndex;
         const success = currentPlayer.moveTo(targetNodeIndex, board);
 
         if (success) {
@@ -316,9 +406,19 @@ export default class GameScene extends Phaser.Scene {
                 ease: 'Quad.easeOut',
                 onComplete: () => {
                     this.centerOnActivePlayer();
-                    // If arrived at view node and movesRemaining == 0, trigger sightseeing popup
-                    if (currentPlayer.movesRemaining === 0 && targetNode.type === 'view') {
-                        this.showSightseeingFact(targetNode);
+                    
+                    // Check for "hot potato" Dr. Drago curse passing
+                    const transfer = this.game.checkCurseTransfer();
+                    if (transfer) {
+                        // Smoothly snap Drago to new player container
+                        this.tweens.add({
+                            targets: this.dragoContainer,
+                            x: tx,
+                            y: ty,
+                            duration: 300,
+                            ease: 'Quad.easeInOut'
+                        });
+                        this.showEventModal('CURSE PASSED!', `${transfer.from.name} passed the Dr. Drago curse to ${transfer.to.name}!`, () => {});
                     }
                 }
             });
@@ -326,15 +426,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     highlightNeighbors() {
-        // Reset all nodes opacity
-        this.nodeMarkers.forEach(m => m.setAlpha(0.6));
+        this.nodeMarkers.forEach(m => m.setAlpha(0.5));
 
         const currentPlayer = this.game.players[this.game.currentPlayerIndex];
         if (currentPlayer.movesRemaining > 0 || currentPlayer.pathHistory.length > 1) {
             const board = this.game.board;
             const currentNode = board.findNodeById(currentPlayer.currentNodeIndex);
             if (currentNode) {
-                // Highlight valid neighboring directions
                 currentNode.neighbors.forEach(neighborIndex => {
                     if (neighborIndex !== null) {
                         this.nodeMarkers[neighborIndex].setAlpha(1.0);
@@ -344,34 +442,55 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    showSightseeingFact(node) {
-        this.factTitle.setText(node.name ? node.name.toUpperCase() : 'LOCAL LANDMARK');
-        this.factDesc.setText(node.text || 'A beautiful historical site to visit along your rally journey.');
-        this.factModal.setVisible(true);
-    }
-
-    closeFactModal() {
-        this.factModal.setVisible(false);
-    }
-
     finishTurn() {
         this.endTurnButton.disableInteractive().setAlpha(0.3).setStyle({ color: '#a0aec0', backgroundColor: '#161d2d' });
-        this.game.endTurn();
+        
+        // Execute landing node rules
+        const currentPlayer = this.game.players[this.game.currentPlayerIndex];
+        const landResult = this.game.landOnNode(currentPlayer);
 
-        // Animate Dr. Drago move
+        if (landResult) {
+            if (landResult.type === 'yellow') {
+                this.showYellowModal(landResult);
+            } else if (landResult.type === 'purple') {
+                this.showPurpleModal();
+            } else if (landResult.type === 'property') {
+                this.showPropertyModal(landResult.node);
+            } else {
+                this.completeTurnEnding();
+            }
+        } else {
+            this.completeTurnEnding();
+        }
+    }
+
+    completeTurnEnding() {
+        const winDetails = this.game.endTurn();
+
+        // Animate Dr. Drago position update
         const dragoNode = this.game.board.findNodeById(this.game.dragoPosition);
         const dx = dragoNode.x * 16 + 8;
         const dy = dragoNode.y * 16 + 8;
-
         this.tweens.add({
-            targets: [this.dragoSprite, this.dragoText],
+            targets: this.dragoContainer,
             x: dx,
             y: dy,
             duration: 400,
             ease: 'Quad.easeInOut'
         });
 
-        // Setup for next player
+        if (winDetails) {
+            // Stage was won! Show modal
+            this.showEventModal('STAGE CLEARED!', `🏆 ${winDetails.winner.name} reached ${winDetails.oldTargetName} and gets $${winDetails.prize.toLocaleString()}!\n\nNext Destination: ${winDetails.newTargetName}.\n💀 Dr. Drago moved to haunt ${winDetails.furthestPlayer.name}!`, () => {
+                this.updateTargetCapitalMarker();
+                this.advanceToNextTurn();
+            });
+        } else {
+            this.advanceToNextTurn();
+        }
+    }
+
+    advanceToNextTurn() {
         this.updateUIStatus();
         this.rollButton.setInteractive({ useHandCursor: true }).setAlpha(1);
         this.highlightNeighbors();
@@ -385,6 +504,33 @@ export default class GameScene extends Phaser.Scene {
         const py = node.y * 16 + 8;
 
         this.cameras.main.pan(px, py, 500, 'Quad.easeInOut');
+    }
+
+    update(time, delta) {
+        this.updateCompass();
+    }
+
+    updateCompass() {
+        if (this.game.targetCapitalIndex === null) return;
+
+        const currentPlayer = this.game.players[this.game.currentPlayerIndex];
+        const targetNode = this.game.board.findNodeById(this.game.targetCapitalIndex);
+        const playerNode = this.game.board.findNodeById(currentPlayer.currentNodeIndex);
+
+        if (targetNode && playerNode) {
+            const px = playerNode.x * 16 + 8;
+            const py = playerNode.y * 16 + 8;
+            const tx = targetNode.x * 16 + 8;
+            const ty = targetNode.y * 16 + 8;
+
+            // Rotate compass needle toward target
+            const angle = Phaser.Math.Angle.Between(px, py, tx, ty);
+            this.compassNeedle.setRotation(angle + Math.PI / 2);
+
+            // Compute step distance
+            const distance = this.game.board.getShortestPathDistance(currentPlayer.currentNodeIndex, this.game.targetCapitalIndex);
+            this.compassText.setText(`${targetNode.name}\n${distance} steps`);
+        }
     }
 
     updateUIStatus() {
@@ -409,10 +555,260 @@ export default class GameScene extends Phaser.Scene {
             this.movesText.setText('Roll the dice to start moving.');
             this.endTurnButton.disableInteractive().setAlpha(0.3).setStyle({ color: '#a0aec0', backgroundColor: '#161d2d' });
         }
+
+        const netWorth = currentPlayer.getNetWorth(this.game.board);
+        this.playerBalanceText.setText(`Cash: $${currentPlayer.money.toLocaleString()} | Net Worth: $${netWorth.toLocaleString()}${currentPlayer.dragoHaunted ? ' | 💀 HAUNTED' : ''}`);
+
+        // Update Card Drawer buttons
+        this.renderCardDrawer(currentPlayer);
+    }
+
+    renderCardDrawer(player) {
+        // Clear old buttons
+        this.cardButtonsContainer.removeAll(true);
+
+        const cardWidth = 90;
+        const spacing = 10;
+        const totalWidth = (player.cards.length * cardWidth) + ((player.cards.length - 1) * spacing);
+        const startX = -totalWidth / 2 + cardWidth / 2;
+
+        player.cards.forEach((card, idx) => {
+            const cx = startX + idx * (cardWidth + spacing);
+            const cy = 0;
+
+            const cardGroup = this.add.container(cx, cy);
+
+            const bg = this.add.graphics();
+            bg.fillStyle(0x1d273a, 1);
+            bg.fillRoundedRect(-40, -30, 80, 60, 8);
+            bg.lineStyle(1.5, 0x8c6d58, 0.4);
+            bg.strokeRoundedRect(-40, -30, 80, 60, 8);
+
+            const name = this.add.text(0, -15, card.name, {
+                fontSize: '11px',
+                color: '#00ff66',
+                fontStyle: 'bold',
+                align: 'center',
+                wordWrap: { width: 75 }
+            }).setOrigin(0.5);
+
+            const desc = this.add.text(0, 10, card.id.replace('_', ' ').toUpperCase(), {
+                fontSize: '9px',
+                color: '#cbd5e0',
+                align: 'center'
+            }).setOrigin(0.5);
+
+            cardGroup.add([bg, name, desc]);
+
+            // Add play interactivity (only clickable BEFORE rolling dice)
+            if (player.movesRemaining === 0 && player.pathHistory.length === 1) {
+                bg.setInteractive(new Phaser.Geom.Rectangle(-40, -30, 80, 60), Phaser.Geom.Rectangle.Contains, true);
+                bg.on('pointerdown', () => this.playCardAction(idx));
+                bg.on('pointerover', () => bg.lineStyle(2, 0x00ff66, 1).strokeRoundedRect(-40, -30, 80, 60, 8));
+                bg.on('pointerout', () => bg.lineStyle(1.5, 0x8c6d58, 0.4).strokeRoundedRect(-40, -30, 80, 60, 8));
+            } else {
+                cardGroup.setAlpha(0.5);
+            }
+
+            this.cardButtonsContainer.add(cardGroup);
+        });
+    }
+
+    playCardAction(cardIndex) {
+        const result = this.game.playCard(this.game.currentPlayerIndex, cardIndex);
+        if (result.success) {
+            this.showEventModal('CARD PLAYED', result.msg, () => {
+                this.updateUIStatus();
+            });
+        }
+    }
+
+    // --- MODAL UTILITIES ---
+
+    showEventModal(title, text, onClose) {
+        this.modalTitle.setText(title).setColor('#ffd700');
+        this.modalBody.setText(text);
+        this.modalButtons.removeAll(true);
+
+        const btn = this.add.text(0, 60, 'CONTINUE', {
+            fontSize: '16px',
+            color: '#ffffff',
+            backgroundColor: '#8c6d58',
+            padding: { x: 20, y: 8 },
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+              this.modalOverlay.setVisible(false);
+              if (onClose) onClose();
+          });
+
+        this.modalButtons.add(btn);
+        this.modalOverlay.setVisible(true);
+    }
+
+    showYellowModal(result) {
+        this.modalTitle.setText('CARD DRAWN').setColor('#eccc68');
+        
+        let text = '';
+        if (result.drawn) {
+            text = `You landed on a Chance node and drew:\n\n"${result.card.name}"\n(${result.card.desc})`;
+        } else {
+            text = `You landed on a Chance node, but since your hand is already full (8 cards), you had to discard "${result.card.name}".`;
+        }
+
+        this.modalBody.setText(text);
+        this.modalButtons.removeAll(true);
+
+        const btn = this.add.text(0, 60, 'OK', {
+            fontSize: '16px',
+            color: '#ffffff',
+            backgroundColor: '#eccc68',
+            padding: { x: 20, y: 8 },
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+              this.modalOverlay.setVisible(false);
+              this.completeTurnEnding();
+          });
+
+        this.modalButtons.add(btn);
+        this.modalOverlay.setVisible(true);
+    }
+
+    showPurpleModal() {
+        const player = this.game.players[this.game.currentPlayerIndex];
+        this.modalTitle.setText('CARD SHOP').setColor('#a4b0be');
+        this.modalBody.setText(`Would you like to buy a card or sell one of yours?\n\nYour Cash: $${player.money.toLocaleString()}`);
+        this.modalButtons.removeAll(true);
+
+        // Buy button (only if has money and hand not full)
+        const canBuy = player.money >= 5000 && player.cards.length < 8;
+        const buyBtn = this.add.text(-120, 60, 'BUY CARD ($5,000)', {
+            fontSize: '14px',
+            color: canBuy ? '#ffffff' : '#4a5568',
+            backgroundColor: canBuy ? '#00ff66' : '#1a202c',
+            padding: { x: 12, y: 8 },
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        if (canBuy) {
+            buyBtn.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+                const randomCard = CARD_TEMPLATES[Math.floor(Math.random() * CARD_TEMPLATES.length)];
+                player.money -= 5000;
+                player.drawCard(randomCard);
+                this.modalOverlay.setVisible(false);
+                this.showEventModal('CARD PURCHASED', `You bought:\n\n"${randomCard.name}"\n(${randomCard.desc})`, () => {
+                    this.completeTurnEnding();
+                });
+            });
+        }
+
+        // Sell button (only if has cards to sell)
+        const canSell = player.cards.length > 0;
+        const sellBtn = this.add.text(120, 60, 'SELL CARD ($2,500)', {
+            fontSize: '14px',
+            color: canSell ? '#ffffff' : '#4a5568',
+            backgroundColor: canSell ? '#ff4757' : '#1a202c',
+            padding: { x: 12, y: 8 },
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        if (canSell) {
+            sellBtn.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+                // Open a sub-select overlay or just sell the first card in hand for simplicity
+                const card = player.cards[0];
+                player.money += 2500;
+                player.cards.splice(0, 1);
+                this.modalOverlay.setVisible(false);
+                this.showEventModal('CARD SOLD', `You sold "${card.name}" back to the bank for $2,500.`, () => {
+                    this.completeTurnEnding();
+                });
+            });
+        }
+
+        // Skip button
+        const skipBtn = this.add.text(0, 120, 'SKIP / LEAVE', {
+            fontSize: '14px',
+            color: '#ffffff',
+            backgroundColor: '#4a5568',
+            padding: { x: 16, y: 8 },
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+              this.modalOverlay.setVisible(false);
+              this.completeTurnEnding();
+          });
+
+        this.modalButtons.add([buyBtn, sellBtn, skipBtn]);
+        this.modalOverlay.setVisible(true);
+    }
+
+    showPropertyModal(node) {
+        const player = this.game.players[this.game.currentPlayerIndex];
+        this.modalTitle.setText(node.name.toUpperCase()).setColor('#ff7f50');
+
+        // Check ownership of properties in city
+        let bodyText = `Welcome to ${node.name}!\n\nProperties in this city:\n`;
+        node.properties.forEach((p, idx) => {
+            bodyText += `${idx + 1}. ${p.name} - Cost: $${p.cost.toLocaleString()} | Rent: $${p.rent.toLocaleString()} (${p.owner ? 'Owner: ' + p.owner : 'AVAILABLE'})\n`;
+        });
+        bodyText += `\nYour Cash: $${player.money.toLocaleString()}`;
+        this.modalBody.setText(bodyText);
+
+        this.modalButtons.removeAll(true);
+
+        // Add purchase button for each available property the player can afford
+        let btnCount = 0;
+        node.properties.forEach((p, idx) => {
+            if (p.owner === null && player.money >= p.cost) {
+                const buyBtn = this.add.text(0, idx * 45 - 20, `BUY ${p.name.toUpperCase()} ($${p.cost.toLocaleString()})`, {
+                    fontSize: '13px',
+                    color: '#ffffff',
+                    backgroundColor: '#ff7f50',
+                    padding: { x: 14, y: 6 },
+                    fontFamily: 'Arial',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5)
+                  .setInteractive({ useHandCursor: true })
+                  .on('pointerdown', () => {
+                      player.buyProperty(currentPlayer.currentNodeIndex, idx, this.game.board);
+                      this.modalOverlay.setVisible(false);
+                      this.completeTurnEnding();
+                  });
+                this.modalButtons.add(buyBtn);
+                btnCount++;
+            }
+        });
+
+        // Close / Don't buy button
+        const skipBtn = this.add.text(0, btnCount * 45 - 20, 'LEAVE CITY', {
+            fontSize: '14px',
+            color: '#ffffff',
+            backgroundColor: '#4a5568',
+            padding: { x: 16, y: 8 },
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+              this.modalOverlay.setVisible(false);
+              this.completeTurnEnding();
+          });
+
+        this.modalButtons.add(skipBtn);
+        this.modalOverlay.setVisible(true);
     }
 
     /**
-     * Helper method to draw dashed lines.
+     * Helper to draw dashed lines.
      */
     drawDashedLine(graphics, x1, y1, x2, y2, dashLength = 8, gapLength = 6) {
         const dx = x2 - x1;
