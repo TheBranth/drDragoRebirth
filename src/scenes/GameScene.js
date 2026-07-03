@@ -52,10 +52,10 @@ export default class GameScene extends Phaser.Scene {
                     if (neighbor) {
                         const isWater = node.flight[dir] === 1;
                         if (isWater) {
-                            connectionGraphics.lineStyle(2.5, 0x00d2d3, 0.8); // Dashed bright cyan
+                            connectionGraphics.lineStyle(2.5, 0x00a8ff, 0.85); // Dashed electric blue
                             this.drawDashedLine(connectionGraphics, px, py, neighbor.x * 16 + 8, neighbor.y * 16 + 8, 8, 6);
                         } else {
-                            connectionGraphics.lineStyle(3.5, 0x2d3748, 0.65); // Solid charcoal gray
+                            connectionGraphics.lineStyle(3, 0xf1f2f6, 0.7); // Solid silver road
                             connectionGraphics.beginPath();
                             connectionGraphics.moveTo(px, py);
                             connectionGraphics.lineTo(neighbor.x * 16 + 8, neighbor.y * 16 + 8);
