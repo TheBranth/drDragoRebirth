@@ -42,6 +42,7 @@ Current Status:
 - Programmatically rendered all node connections in `GameScene.js`, separating land roads (solid brown lines) from water routes (dashed light-blue lines) by reading connection `flight` values in the JSON database.
 - Completed Option 1 (Core Gameplay & Economy): implemented city properties, monopolies, passive rent collection, Feature Cards drawing and action events, stage targets, Dr. Drago haunting, and hot-potato curse passing.
 - Covered with a comprehensive node-level integration test suite (`test_gameplay.js`) verifying property transactions, monopoly doubling, card actions, stage wins, and haunting penalties.
+- Executed a deep codebase purge and rebrand to "Baron Blackwood's Crazy Races" across all user-facing text, HTML page titles, scenes, logic classes, variables, card IDs, and test suites, making the project completely independent and copyright-safe.
 
 Next Steps (Proposed Plan):
 1. Implement Online Multiplayer support (Create/Join Session lobby system).

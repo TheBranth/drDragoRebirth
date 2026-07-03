@@ -8,7 +8,7 @@ export const CARD_TEMPLATES = [
     { id: 'specific_1', name: 'Direct 1', desc: 'Sets your next roll to exactly 1.', actionType: 'dice_modifier' },
     { id: 'specific_2', name: 'Direct 2', desc: 'Sets your next roll to exactly 2.', actionType: 'dice_modifier' },
     { id: 'specific_3', name: 'Direct 3', desc: 'Sets your next roll to exactly 3.', actionType: 'dice_modifier' },
-    { id: 'drago_shield', name: 'Drago Shield', desc: 'Instantly expels Dr. Drago if you are haunted.', actionType: 'defensive' },
+    { id: 'blackwood_shield', name: 'Blackwood Shield', desc: 'Instantly expels Baron Blackwood if you are haunted.', actionType: 'defensive' },
     { id: 'teleport', name: 'Teleport Swap', desc: 'Swaps position with your opponent.', actionType: 'movement' },
     { id: 'steal_cash', name: 'Cash Squeeze', desc: 'Steals $10,000 from your opponent.', actionType: 'sabotage' },
     { id: 'freeze_opponent', name: 'Freeze Opponent', desc: 'Forces your opponent to skip their next turn.', actionType: 'sabotage' }
@@ -22,7 +22,7 @@ export default class Game {
             return new Player(config.name, 399, character); // Start at Prague (399)
         });
         this.currentPlayerIndex = 0;
-        this.dragoPosition = 399; // Start Dr. Drago at Prague
+        this.blackwoodPosition = 399; // Start Baron Blackwood at Prague
         this.targetCapitalIndex = null;
         
         // Select initial target capital destination
@@ -55,7 +55,7 @@ export default class Game {
 
     /**
      * Start the turn for the current player.
-     * Handles skip turns, passive rent collection, Drago penalties, and dice rolling.
+     * Handles skip turns, passive rent collection, Blackwood penalties, and dice rolling.
      * @returns {object} turn details
      */
     startTurn() {
@@ -72,10 +72,10 @@ export default class Game {
         // 2. Passive Rent Payout
         const rentCollected = currentPlayer.collectPassiveRent(this.board);
 
-        // 3. Dr. Drago penalty application
-        let dragoEventDetails = null;
-        if (currentPlayer.dragoHaunted) {
-            dragoEventDetails = this.applyDragoPenalty(currentPlayer);
+        // 3. Baron Blackwood penalty application
+        let blackwoodEventDetails = null;
+        if (currentPlayer.blackwoodHaunted) {
+            blackwoodEventDetails = this.applyBlackwoodPenalty(currentPlayer);
         }
 
         // 4. Dice Roll calculation
@@ -105,7 +105,7 @@ export default class Game {
             player: currentPlayer,
             diceRoll: diceRoll,
             rentCollected: rentCollected,
-            dragoEvent: dragoEventDetails
+            blackwoodEvent: blackwoodEventDetails
         };
     }
 
@@ -120,8 +120,8 @@ export default class Game {
         // Check for stage win
         const winDetails = this.checkStageWin();
 
-        // Move Dr. Drago randomly if he is not currently haunting someone on their space
-        this.moveDragoRandomly();
+        // Move Baron Blackwood randomly if he is not currently haunting someone on their space
+        this.moveBlackwoodRandomly();
 
         // Advance turn
         this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
@@ -131,7 +131,7 @@ export default class Game {
 
     /**
      * Checks if the active player landed exactly on the target capital node.
-     * Awards $100,000, selects a new destination, and transfers Dr. Drago to the furthest player.
+     * Awards $100,000, selects a new destination, and transfers Baron Blackwood to the furthest player.
      * @returns {object|null} win details if won, else null
      */
     checkStageWin() {
@@ -155,14 +155,14 @@ export default class Game {
                 }
             });
 
-            // Reassign Dr. Drago
+            // Reassign Baron Blackwood
             this.players.forEach(p => {
-                p.dragoHaunted = false;
+                p.blackwoodHaunted = false;
             });
             if (furthestPlayer) {
-                furthestPlayer.dragoHaunted = true;
-                this.dragoPosition = furthestPlayer.currentNodeIndex;
-                console.log(`💀 Dr. Drago has attached to the furthest player: ${furthestPlayer.name}!`);
+                furthestPlayer.blackwoodHaunted = true;
+                this.blackwoodPosition = furthestPlayer.currentNodeIndex;
+                console.log(`💀 Baron Blackwood has attached to the furthest player: ${furthestPlayer.name}!`);
             }
 
             // Select new target destination
@@ -187,15 +187,15 @@ export default class Game {
      */
     checkCurseTransfer() {
         const currentPlayer = this.players[this.currentPlayerIndex];
-        if (!currentPlayer.dragoHaunted) return null;
+        if (!currentPlayer.blackwoodHaunted) return null;
 
         // Check if current player shares the space with any other player
         const otherPlayer = this.players.find(p => p !== currentPlayer && p.currentNodeIndex === currentPlayer.currentNodeIndex);
         if (otherPlayer) {
-            currentPlayer.dragoHaunted = false;
-            otherPlayer.dragoHaunted = true;
-            this.dragoPosition = otherPlayer.currentNodeIndex;
-            console.log(`💀 Curse passed! ${currentPlayer.name} passed the Drago curse to ${otherPlayer.name}!`);
+            currentPlayer.blackwoodHaunted = false;
+            otherPlayer.blackwoodHaunted = true;
+            this.blackwoodPosition = otherPlayer.currentNodeIndex;
+            console.log(`💀 Curse passed! ${currentPlayer.name} passed the Blackwood curse to ${otherPlayer.name}!`);
             return {
                 from: currentPlayer,
                 to: otherPlayer
@@ -222,22 +222,22 @@ export default class Game {
         if (card.id === 'double_dice' || card.id === 'triple_dice' || card.id.startsWith('specific_')) {
             player.activeCardModifier = card.id;
             msg = `${player.name} played ${card.name}. Next roll is modified!`;
-        } else if (card.id === 'drago_shield') {
-            if (player.dragoHaunted) {
-                player.dragoHaunted = false;
-                this.dragoPosition = 399; // Banish to Prague
-                msg = `${player.name} played Drago Shield. Dr. Drago has been banished back to Prague!`;
+        } else if (card.id === 'blackwood_shield') {
+            if (player.blackwoodHaunted) {
+                player.blackwoodHaunted = false;
+                this.blackwoodPosition = 399; // Banish to Prague
+                msg = `${player.name} played Blackwood Shield. Baron Blackwood has been banished back to Prague!`;
             } else {
-                return { success: false, msg: 'You are not haunted by Dr. Drago.' };
+                return { success: false, msg: 'You are not haunted by Baron Blackwood.' };
             }
         } else if (card.id === 'teleport') {
             const tempNode = player.currentNodeIndex;
             player.currentNodeIndex = opponent.currentNodeIndex;
             opponent.currentNodeIndex = tempNode;
             
-            // Re-sync Dr. Drago position if he was haunting someone
-            if (player.dragoHaunted) this.dragoPosition = player.currentNodeIndex;
-            else if (opponent.dragoHaunted) this.dragoPosition = opponent.currentNodeIndex;
+            // Re-sync Baron Blackwood position if he was haunting someone
+            if (player.blackwoodHaunted) this.blackwoodPosition = player.currentNodeIndex;
+            else if (opponent.blackwoodHaunted) this.blackwoodPosition = opponent.currentNodeIndex;
 
             msg = `${player.name} played Teleport Swap! Swapped positions with ${opponent.name}.`;
         } else if (card.id === 'steal_cash') {
@@ -256,11 +256,11 @@ export default class Game {
     }
 
     /**
-     * Triggers start-of-turn penalties when targeted by Dr. Drago.
+     * Triggers start-of-turn penalties when targeted by Baron Blackwood.
      * @param {Player} player 
      * @returns {object} details of the penalty
      */
-    applyDragoPenalty(player) {
+    applyBlackwoodPenalty(player) {
         const events = ['steal', 'sell', 'card', 'distribute'];
         const randomEvent = events[Math.floor(Math.random() * events.length)];
         
@@ -268,7 +268,7 @@ export default class Game {
         if (randomEvent === 'steal') {
             const stolen = Math.floor(Math.random() * 10000) + 5000; // $5k - $15k
             player.money = Math.max(0, player.money - stolen);
-            msg = `Dr. Drago steals $${stolen} to pay off his luxury car loan.`;
+            msg = `Baron Blackwood steals $${stolen} to pay off his luxury sports car loan.`;
         } else if (randomEvent === 'sell') {
             // Find an owned property
             let targetProperty = null;
@@ -295,24 +295,24 @@ export default class Game {
                 const refund = Math.floor(targetProperty.cost * 0.3); // 30% fire-sale price
                 player.money += refund;
                 targetProperty.owner = null;
-                msg = `Dr. Drago sells your property "${targetProperty.name}" in ${targetNode.name} at a fire-sale loss for $${refund}!`;
+                msg = `Baron Blackwood sells your property "${targetProperty.name}" in ${targetNode.name} at a fire-sale loss for $${refund}!`;
             } else {
                 // Fallback to steal cash
                 const stolen = 5000;
                 player.money = Math.max(0, player.money - stolen);
-                msg = `Dr. Drago tries to sell a property, but since you own nothing, he just steals $${stolen}!`;
+                msg = `Baron Blackwood tries to sell a property, but since you own nothing, he just steals $${stolen}!`;
             }
         } else if (randomEvent === 'card') {
             if (player.cards.length > 0) {
                 const cardIdx = Math.floor(Math.random() * player.cards.length);
                 const destroyedCard = player.cards[cardIdx];
                 player.cards.splice(cardIdx, 1);
-                msg = `Dr. Drago shreds your Feature Card: "${destroyedCard.name}"!`;
+                msg = `Baron Blackwood shreds your Feature Card: "${destroyedCard.name}"!`;
             } else {
                 // Fallback to steal cash
                 const stolen = 5000;
                 player.money = Math.max(0, player.money - stolen);
-                msg = `Dr. Drago tries to destroy a card, but since your hand is empty, he steals $${stolen}!`;
+                msg = `Baron Blackwood tries to destroy a card, but since your hand is empty, he steals $${stolen}!`;
             }
         } else if (randomEvent === 'distribute') {
             const sum = Math.min(10000, player.money);
@@ -325,11 +325,11 @@ export default class Game {
                     p.money += split;
                 }
             });
-            msg = `Dr. Drago robs you of $${sum} and splits it equally ($${split} each) among other players!`;
+            msg = `Baron Blackwood robs you of $${sum} and splits it equally ($${split} each) among other players!`;
         }
 
-        // Keep Dr. Drago at player's node position
-        this.dragoPosition = player.currentNodeIndex;
+        // Keep Baron Blackwood at player's node position
+        this.blackwoodPosition = player.currentNodeIndex;
 
         return { event: randomEvent, msg: msg };
     }
@@ -345,17 +345,17 @@ export default class Game {
         return roll;
     }
 
-    moveDragoRandomly() {
-        // Only move Dr. Drago randomly if he is NOT haunting a player on their current node
-        const isHauntingPlayer = this.players.some(p => p.dragoHaunted && p.currentNodeIndex === this.dragoPosition);
+    moveBlackwoodRandomly() {
+        // Only move Baron Blackwood randomly if he is NOT haunting a player on their current node
+        const isHauntingPlayer = this.players.some(p => p.blackwoodHaunted && p.currentNodeIndex === this.blackwoodPosition);
         if (isHauntingPlayer) return;
 
-        const dragoNode = this.board.findNodeById(this.dragoPosition);
-        if (dragoNode) {
-            const validNeighbors = dragoNode.neighbors.filter(n => n !== null);
+        const blackwoodNode = this.board.findNodeById(this.blackwoodPosition);
+        if (blackwoodNode) {
+            const validNeighbors = blackwoodNode.neighbors.filter(n => n !== null);
             if (validNeighbors.length > 0) {
                 const randomIndex = Math.floor(Math.random() * validNeighbors.length);
-                this.dragoPosition = validNeighbors[randomIndex];
+                this.blackwoodPosition = validNeighbors[randomIndex];
             }
         }
     }

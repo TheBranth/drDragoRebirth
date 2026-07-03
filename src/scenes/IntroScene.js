@@ -12,14 +12,14 @@ export default class IntroScene extends Phaser.Scene {
         const centerY = this.cameras.main.height / 2;
 
         // --- TITLE --- 
-        this.add.text(centerX, centerY - 150, "Dr. Drago's Madcap Chase", {
-            font: 'bold 52px Arial',
+        this.add.text(centerX, centerY - 150, "Baron Blackwood's Crazy Races", {
+            font: 'bold 44px Arial', // Slightly smaller font to fit the longer name
             fill: '#ffffff',
             align: 'center'
         }).setOrigin(0.5);
 
-        this.add.text(centerX, centerY - 100, "(fan remake)", {
-            font: 'italic 24px Arial',
+        this.add.text(centerX, centerY - 95, "Inspired by a certain Madcap Chase", {
+            font: 'italic 20px Arial',
             fill: '#dddddd',
             align: 'center'
         }).setOrigin(0.5);

@@ -17,7 +17,7 @@ export default class Player {
         
         // Status effects
         this.skipNextTurn = false;
-        this.dragoHaunted = false;
+        this.blackwoodHaunted = false;
     }
 
     startTurn(moves) {

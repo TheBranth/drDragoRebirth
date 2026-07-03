@@ -124,17 +124,17 @@ export default class GameScene extends Phaser.Scene {
             this.playerSprites.push(playerContainer);
         });
 
-        // --- DRAGO SPRITE ---
-        const dragoNode = board.findNodeById(this.game.dragoPosition);
-        this.dragoContainer = this.add.container(dragoNode.x * 16 + 8, dragoNode.y * 16 + 8);
-        const dragoBody = this.add.circle(0, 0, 11, 0xff0000, 0.9);
-        dragoBody.setStrokeStyle(2.5, 0xffff00, 1);
-        const dragoText = this.add.text(0, 0, 'DR', {
+        // --- BARON BLACKWOOD SPRITE ---
+        const blackwoodNode = board.findNodeById(this.game.blackwoodPosition);
+        this.blackwoodContainer = this.add.container(blackwoodNode.x * 16 + 8, blackwoodNode.y * 16 + 8);
+        const blackwoodBody = this.add.circle(0, 0, 11, 0xff0000, 0.9);
+        blackwoodBody.setStrokeStyle(2.5, 0xffff00, 1);
+        const blackwoodText = this.add.text(0, 0, 'BB', {
             fontSize: '10px',
             color: '#ffffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
-        this.dragoContainer.add([dragoBody, dragoText]);
+        this.blackwoodContainer.add([blackwoodBody, blackwoodText]);
 
         // --- CAMERA PAN & ZOOM ---
         this.input.on('pointermove', pointer => {
@@ -366,9 +366,9 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        // Check if Drago event occurred
-        if (result.dragoEvent) {
-            this.showEventModal('DR. DRAGO SABOTAGE!', result.dragoEvent.msg, () => {
+        // Check if Blackwood event occurred
+        if (result.blackwoodEvent) {
+            this.showEventModal("BARON BLACKWOOD'S SABOTAGE!", result.blackwoodEvent.msg, () => {
                 this.updateUIStatus();
                 this.highlightNeighbors();
             });
@@ -407,18 +407,18 @@ export default class GameScene extends Phaser.Scene {
                 onComplete: () => {
                     this.centerOnActivePlayer();
                     
-                    // Check for "hot potato" Dr. Drago curse passing
+                    // Check for "hot potato" Baron Blackwood curse passing
                     const transfer = this.game.checkCurseTransfer();
                     if (transfer) {
-                        // Smoothly snap Drago to new player container
+                        // Smoothly snap Blackwood to new player container
                         this.tweens.add({
-                            targets: this.dragoContainer,
+                            targets: this.blackwoodContainer,
                             x: tx,
                             y: ty,
                             duration: 300,
                             ease: 'Quad.easeInOut'
                         });
-                        this.showEventModal('CURSE PASSED!', `${transfer.from.name} passed the Dr. Drago curse to ${transfer.to.name}!`, () => {});
+                        this.showEventModal('CURSE PASSED!', `${transfer.from.name} passed the Baron Blackwood curse to ${transfer.to.name}!`, () => {});
                     }
                 }
             });
@@ -467,12 +467,12 @@ export default class GameScene extends Phaser.Scene {
     completeTurnEnding() {
         const winDetails = this.game.endTurn();
 
-        // Animate Dr. Drago position update
-        const dragoNode = this.game.board.findNodeById(this.game.dragoPosition);
-        const dx = dragoNode.x * 16 + 8;
-        const dy = dragoNode.y * 16 + 8;
+        // Animate Baron Blackwood position update
+        const blackwoodNode = this.game.board.findNodeById(this.game.blackwoodPosition);
+        const dx = blackwoodNode.x * 16 + 8;
+        const dy = blackwoodNode.y * 16 + 8;
         this.tweens.add({
-            targets: this.dragoContainer,
+            targets: this.blackwoodContainer,
             x: dx,
             y: dy,
             duration: 400,
@@ -481,7 +481,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (winDetails) {
             // Stage was won! Show modal
-            this.showEventModal('STAGE CLEARED!', `🏆 ${winDetails.winner.name} reached ${winDetails.oldTargetName} and gets $${winDetails.prize.toLocaleString()}!\n\nNext Destination: ${winDetails.newTargetName}.\n💀 Dr. Drago moved to haunt ${winDetails.furthestPlayer.name}!`, () => {
+            this.showEventModal('STAGE CLEARED!', `🏆 ${winDetails.winner.name} reached ${winDetails.oldTargetName} and gets $${winDetails.prize.toLocaleString()}!\n\nNext Destination: ${winDetails.newTargetName}.\n💀 Baron Blackwood moved to haunt ${winDetails.furthestPlayer.name}!`, () => {
                 this.updateTargetCapitalMarker();
                 this.advanceToNextTurn();
             });
@@ -557,7 +557,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         const netWorth = currentPlayer.getNetWorth(this.game.board);
-        this.playerBalanceText.setText(`Cash: $${currentPlayer.money.toLocaleString()} | Net Worth: $${netWorth.toLocaleString()}${currentPlayer.dragoHaunted ? ' | 💀 HAUNTED' : ''}`);
+        this.playerBalanceText.setText(`Cash: $${currentPlayer.money.toLocaleString()} | Net Worth: $${netWorth.toLocaleString()}${currentPlayer.blackwoodHaunted ? ' | 💀 HAUNTED' : ''}`);
 
         // Update Card Drawer buttons
         this.renderCardDrawer(currentPlayer);
