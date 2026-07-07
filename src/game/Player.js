@@ -252,3 +252,46 @@ export default class Player {
         }
     }
 }
+
+/**
+ * Retrieves player stats (wins, total matches, win ratio) from localStorage.
+ * @returns {object} win/loss metrics
+ */
+export function getPlayerStats() {
+    if (typeof localStorage === 'undefined') {
+        return { wins: 0, matches: 0, winRatio: 0.0 };
+    }
+    try {
+        const data = localStorage.getItem('bb_player_stats');
+        if (data) {
+            const parsed = JSON.parse(data);
+            const wins = typeof parsed.wins === 'number' ? parsed.wins : 0;
+            const matches = typeof parsed.matches === 'number' ? parsed.matches : 0;
+            const winRatio = matches > 0 ? (wins / matches) : 0.0;
+            return { wins, matches, winRatio };
+        }
+    } catch (e) {
+        console.error('Error reading player stats:', e);
+    }
+    return { wins: 0, matches: 0, winRatio: 0.0 };
+}
+
+/**
+ * Records a win or loss, recalculating win ratio in localStorage.
+ * @param {boolean} isWin true if player won, else false
+ */
+export function recordMatchResult(isWin) {
+    if (typeof localStorage === 'undefined') return;
+    try {
+        const stats = getPlayerStats();
+        stats.matches += 1;
+        if (isWin) {
+            stats.wins += 1;
+        }
+        stats.winRatio = stats.wins / stats.matches;
+        localStorage.setItem('bb_player_stats', JSON.stringify(stats));
+        console.log('Recorded match result. New stats:', stats);
+    } catch (e) {
+        console.error('Error saving player stats:', e);
+    }
+}

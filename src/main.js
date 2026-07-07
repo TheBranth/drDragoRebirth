@@ -1,5 +1,6 @@
 import IntroScene from './scenes/IntroScene.js';
 import PlayerSelectScene from './scenes/PlayerSelectScene.js';
+import MultiplayerSelectScene from './scenes/MultiplayerSelectScene.js';
 import GameScene from './scenes/GameScene.js';
 
 // This is the configuration for our game
@@ -17,6 +18,7 @@ const config = {
         // The first scene in the array is the one that starts
         IntroScene,
         PlayerSelectScene,
+        MultiplayerSelectScene,
         GameScene
     ]
 };

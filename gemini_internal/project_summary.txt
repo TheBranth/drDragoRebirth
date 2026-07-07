@@ -49,8 +49,10 @@ Current Status:
 - Integrated a sleek carbon-fiber and silver F1 Telemetry Europe map asset, rendering connections as high-contrast solid silver roads (`0xf1f2f6`) and dashed electric neon blue shipping lanes (`0x00a8ff`) to fit the high-speed sabotage theme.
 - Implemented a turn-by-turn Autosave & Resume system using `localStorage`, supporting full serialization/deserialization of player stats, cards, properties ownership, visited cities, target capital indices, and Baron Blackwood haunting status.
 - Added a green glowing "Resume Game" button to the main menu `IntroScene.js` that dynamically restores the exact game state if a savegame exists in `localStorage`.
-- Created an automated integration test suite (`test_autosave.js`) using a mocked global.localStorage interface to verify state serialization and deserialization. Both `test_gameplay.js` and `test_autosave.js` are fully passing.
+- Created a hybrid real-time online multiplayer system supporting Private Rooms (via PeerJS 4-digit codes) and Online Matchmaking (pairing players with closest win ratios via a custom Express/WS WebSocket server).
+- Programmed action-based sync protocol replays for all board interactions (rolls, moves, cards, purchases, shop trades, turn endings) with turn input locks and informational opponent modals.
+- Created `test_matchmaker.js` validating the server's proximity matching queue. All tests passing.
 
 Next Steps (Proposed Plan):
-1. Implement Online Multiplayer support (Create/Join Session lobby system).
-2. Implement Autosave / Save Game System.
+1. Implement AI-generated images to landmark facts and expand sightseeing nodes.
+2. Add support for Google Maps links in landmark facts cards.

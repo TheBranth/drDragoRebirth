@@ -1,0 +1,14 @@
+{
+  "name": "baron-blackwood-crazy-races",
+  "version": "1.0.0",
+  "description": "Multiplayer board game inspired by Dr. Drago's Madcap Chase",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.1"
+  }
+}

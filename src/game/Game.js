@@ -58,7 +58,7 @@ export default class Game {
      * Handles skip turns, passive rent collection, Blackwood penalties, and dice rolling.
      * @returns {object} turn details
      */
-    startTurn() {
+    startTurn(overrideDiceRoll = null, overrideBlackwoodEvent = null) {
         const currentPlayer = this.players[this.currentPlayerIndex];
 
         // 1. Skip turn check
@@ -75,26 +75,31 @@ export default class Game {
         // 3. Baron Blackwood penalty application
         let blackwoodEventDetails = null;
         if (currentPlayer.blackwoodHaunted) {
-            blackwoodEventDetails = this.applyBlackwoodPenalty(currentPlayer);
+            blackwoodEventDetails = this.applyBlackwoodPenalty(currentPlayer, overrideBlackwoodEvent);
         }
 
         // 4. Dice Roll calculation
         let diceRoll = 0;
-        const modifier = currentPlayer.activeCardModifier;
-        currentPlayer.activeCardModifier = null; // Clear after use
-
-        if (modifier === 'specific_1') {
-            diceRoll = 1;
-        } else if (modifier === 'specific_2') {
-            diceRoll = 2;
-        } else if (modifier === 'specific_3') {
-            diceRoll = 3;
-        } else if (modifier === 'double_dice') {
-            diceRoll = this.rollDice(currentPlayer) + this.rollDice(currentPlayer);
-        } else if (modifier === 'triple_dice') {
-            diceRoll = this.rollDice(currentPlayer) + this.rollDice(currentPlayer) + this.rollDice(currentPlayer);
+        if (typeof overrideDiceRoll === 'number') {
+            diceRoll = overrideDiceRoll;
+            currentPlayer.activeCardModifier = null; // Clear active card modifier
         } else {
-            diceRoll = this.rollDice(currentPlayer);
+            const modifier = currentPlayer.activeCardModifier;
+            currentPlayer.activeCardModifier = null; // Clear after use
+
+            if (modifier === 'specific_1') {
+                diceRoll = 1;
+            } else if (modifier === 'specific_2') {
+                diceRoll = 2;
+            } else if (modifier === 'specific_3') {
+                diceRoll = 3;
+            } else if (modifier === 'double_dice') {
+                diceRoll = this.rollDice(currentPlayer) + this.rollDice(currentPlayer);
+            } else if (modifier === 'triple_dice') {
+                diceRoll = this.rollDice(currentPlayer) + this.rollDice(currentPlayer) + this.rollDice(currentPlayer);
+            } else {
+                diceRoll = this.rollDice(currentPlayer);
+            }
         }
 
         currentPlayer.startTurn(diceRoll);
@@ -263,9 +268,9 @@ export default class Game {
      * @param {Player} player 
      * @returns {object} details of the penalty
      */
-    applyBlackwoodPenalty(player) {
+    applyBlackwoodPenalty(player, overrideEvent = null) {
         const events = ['steal', 'sell', 'card', 'distribute'];
-        const randomEvent = events[Math.floor(Math.random() * events.length)];
+        const randomEvent = overrideEvent || events[Math.floor(Math.random() * events.length)];
         
         let msg = '';
         if (randomEvent === 'steal') {

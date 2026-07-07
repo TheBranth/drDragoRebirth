@@ -1,5 +1,6 @@
 import Game, { CARD_TEMPLATES } from '../game/Game.js';
 import Characters from '../game/Characters.js';
+import { recordMatchResult } from '../game/Player.js';
 
 export default class GameScene extends Phaser.Scene {
     constructor() {
@@ -10,6 +11,8 @@ export default class GameScene extends Phaser.Scene {
     init(data) {
         this.selectedCharacter = data ? data.selectedCharacter : null;
         this.resume = data && data.resume;
+        this.isMultiplayer = data && data.isMultiplayer;
+        this.multiplayerConfigs = data && data.playerConfigs;
     }
 
     preload() {
@@ -18,14 +21,32 @@ export default class GameScene extends Phaser.Scene {
 
     create() {
         // --- SETUP THE GAME ---
-        const availableCharacters = Object.keys(Characters);
-        const opponentCharacter = availableCharacters.find(key => key !== this.selectedCharacter) || availableCharacters[0];
-        const playerConfigs = [
-            { name: 'Player 1', character: this.selectedCharacter },
-            { name: 'Player 2', character: opponentCharacter }
-        ];
+        this.isMultiplayer = this.registry.get('network_connection') !== undefined;
+        let playerConfigs;
+        
+        if (this.isMultiplayer) {
+            this.peer = this.registry.get('network_peer');
+            this.conn = this.registry.get('network_connection');
+            this.role = this.registry.get('network_role');
+            this.localPlayerIndex = this.role === 'host' ? 0 : 1;
+            playerConfigs = this.multiplayerConfigs;
+        } else {
+            const availableCharacters = Object.keys(Characters);
+            const opponentCharacter = availableCharacters.find(key => key !== this.selectedCharacter) || availableCharacters[0];
+            playerConfigs = [
+                { name: this.registry.get('local_player_name') || 'Player 1', character: this.selectedCharacter, isLocal: true },
+                { name: 'Player 2', character: opponentCharacter, isLocal: false }
+            ];
+        }
+
         this.game = new Game(playerConfigs);
-        if (this.resume) {
+        
+        if (this.isMultiplayer) {
+            this.game.isMultiplayer = true;
+            this.setupNetworkListeners();
+        }
+
+        if (this.resume && !this.isMultiplayer) {
             const loadSuccess = this.game.loadFromLocalStorage();
             if (!loadSuccess) {
                 console.warn('Failed to load savegame from localStorage. Starting a new game.');
@@ -160,6 +181,9 @@ export default class GameScene extends Phaser.Scene {
 
         // --- KEYBOARD ARROW MOVEMENT ---
         this.input.keyboard.on('keydown', event => {
+            // Prevent input if it is remote player's turn in multiplayer
+            if (this.isMultiplayer && this.game.currentPlayerIndex !== this.localPlayerIndex) return;
+
             const currentPlayer = this.game.players[this.game.currentPlayerIndex];
             
             // Only allow movement if player has rolled and has moves left OR can backtrack
@@ -230,16 +254,20 @@ export default class GameScene extends Phaser.Scene {
         controlBg.setScrollFactor(0);
 
         this.rollButton = this.add.text(40, 150, '🎲 Roll Dice', {
-            fontSize: '20px',
+            fontSize: '18px',
             color: '#00ff66',
             backgroundColor: '#1d273a',
             padding: { x: 16, y: 10 },
             fontFamily: 'Arial',
             fontStyle: 'bold'
-        }).setOrigin(0)
-          .setInteractive({ useHandCursor: true })
+        }).setOrigin(0).setScrollFactor(0);
+
+        this.rollButton.setInteractive({ useHandCursor: true })
           .setScrollFactor(0)
-          .on('pointerdown', () => this.rollDicePhase())
+          .on('pointerdown', () => {
+              if (this.isMultiplayer && this.game.currentPlayerIndex !== this.localPlayerIndex) return;
+              this.rollDicePhase();
+          })
           .on('pointerover', () => this.rollButton.setStyle({ color: '#ffffff', backgroundColor: '#28364f' }))
           .on('pointerout', () => this.rollButton.setStyle({ color: '#00ff66', backgroundColor: '#1d273a' }));
 
@@ -363,9 +391,20 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    rollDicePhase() {
+    rollDicePhase(overrideRoll = null, overrideEvent = null, isNetworkTriggered = false) {
+        if (!isNetworkTriggered && this.isMultiplayer && this.game.currentPlayerIndex !== this.localPlayerIndex) return;
+
         this.rollButton.disableInteractive().setAlpha(0.3);
-        const result = this.game.startTurn();
+        const result = this.game.startTurn(overrideRoll, overrideEvent);
+
+        if (!isNetworkTriggered && this.isMultiplayer) {
+            const blackwoodEventKey = result.blackwoodEvent ? result.blackwoodEvent.event : null;
+            this.sendNetworkAction({
+                action: 'ROLL_DICE',
+                rollValue: result.diceRoll,
+                blackwoodEvent: blackwoodEventKey
+            });
+        }
 
         if (result.skipped) {
             // Player turn skipped
@@ -387,7 +426,9 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
-    handleStepMove(direction) {
+    handleStepMove(direction, isNetworkTriggered = false) {
+        if (!isNetworkTriggered && this.isMultiplayer && this.game.currentPlayerIndex !== this.localPlayerIndex) return;
+
         const currentPlayer = this.game.players[this.game.currentPlayerIndex];
         const board = this.game.board;
         const currentNode = board.findNodeById(currentPlayer.currentNodeIndex);
@@ -399,6 +440,13 @@ export default class GameScene extends Phaser.Scene {
         const success = currentPlayer.moveTo(targetNodeIndex, board);
 
         if (success) {
+            if (!isNetworkTriggered && this.isMultiplayer) {
+                this.sendNetworkAction({
+                    action: 'MOVE_STEP',
+                    direction: direction
+                });
+            }
+
             this.updateUIStatus();
             this.highlightNeighbors();
 
@@ -458,26 +506,47 @@ export default class GameScene extends Phaser.Scene {
         const currentPlayer = this.game.players[this.game.currentPlayerIndex];
         const landResult = this.game.landOnNode(currentPlayer);
 
+        const isLocalTurn = !this.isMultiplayer || (this.game.currentPlayerIndex === this.localPlayerIndex);
+
         if (landResult) {
-            if (landResult.type === 'yellow') {
-                this.showYellowModal(landResult);
-            } else if (landResult.type === 'purple') {
-                this.showPurpleModal();
-            } else if (landResult.type === 'property') {
-                this.showPropertyModal(landResult.node);
-            } else if (landResult.type === 'blue') {
-                this.showBlueModal(landResult);
-            } else if (landResult.type === 'red') {
-                this.showRedModal(landResult);
+            if (isLocalTurn) {
+                if (landResult.type === 'yellow') {
+                    this.showYellowModal(landResult);
+                } else if (landResult.type === 'purple') {
+                    this.showPurpleModal();
+                } else if (landResult.type === 'property') {
+                    this.showPropertyModal(landResult.node);
+                } else if (landResult.type === 'blue') {
+                    this.showBlueModal(landResult);
+                } else if (landResult.type === 'red') {
+                    this.showRedModal(landResult);
+                }
             } else {
-                this.completeTurnEnding();
+                // Informational overlay for remote player landing
+                if (landResult.type === 'yellow') {
+                    this.showEventModal('OPPONENT CHANCE', `${currentPlayer.name} landed on a Chance node and drew a card.`);
+                } else if (landResult.type === 'blue') {
+                    this.showEventModal('OPPONENT LANDING', `${currentPlayer.name} received a sponsorship payout of $${landResult.amount.toLocaleString()}.`);
+                } else if (landResult.type === 'red') {
+                    this.showEventModal('OPPONENT BREAKDOWN', `${currentPlayer.name} paid $${landResult.amount.toLocaleString()} in breakdown repairs.`);
+                }
             }
         } else {
-            this.completeTurnEnding();
+            if (isLocalTurn) {
+                this.completeTurnEnding();
+            }
         }
     }
 
-    completeTurnEnding() {
+    completeTurnEnding(isNetworkTriggered = false) {
+        const isLocalTurn = !this.isMultiplayer || (this.game.currentPlayerIndex === this.localPlayerIndex);
+
+        if (!isNetworkTriggered && this.isMultiplayer && isLocalTurn) {
+            this.sendNetworkAction({
+                action: 'END_TURN'
+            });
+        }
+
         const winDetails = this.game.endTurn();
 
         // Animate Baron Blackwood position update
@@ -493,6 +562,15 @@ export default class GameScene extends Phaser.Scene {
         });
 
         if (winDetails) {
+            // Log wins / losses
+            if (this.isMultiplayer) {
+                const isLocalWinner = winDetails.winner.name === this.game.players[this.localPlayerIndex].name;
+                recordMatchResult(isLocalWinner);
+            } else {
+                const isLocalWinner = winDetails.winner.name === this.game.players[0].name;
+                recordMatchResult(isLocalWinner);
+            }
+
             // Stage was won! Show modal
             this.showEventModal('STAGE CLEARED!', `🏆 ${winDetails.winner.name} reached ${winDetails.oldTargetName} and gets $${winDetails.prize.toLocaleString()}!\n\nNext Destination: ${winDetails.newTargetName}.\n💀 Baron Blackwood moved to haunt ${winDetails.furthestPlayer.name}!`, () => {
                 this.updateTargetCapitalMarker();
@@ -615,10 +693,15 @@ export default class GameScene extends Phaser.Scene {
 
             // Add play interactivity (only clickable BEFORE rolling dice)
             if (player.movesRemaining === 0 && player.pathHistory.length === 1) {
-                bg.setInteractive(new Phaser.Geom.Rectangle(-40, -30, 80, 60), Phaser.Geom.Rectangle.Contains, true);
-                bg.on('pointerdown', () => this.playCardAction(idx));
-                bg.on('pointerover', () => bg.lineStyle(2, 0x00ff66, 1).strokeRoundedRect(-40, -30, 80, 60, 8));
-                bg.on('pointerout', () => bg.lineStyle(1.5, 0x8c6d58, 0.4).strokeRoundedRect(-40, -30, 80, 60, 8));
+                const isLocalTurn = !this.isMultiplayer || (this.game.currentPlayerIndex === this.localPlayerIndex);
+                if (isLocalTurn) {
+                    bg.setInteractive(new Phaser.Geom.Rectangle(-40, -30, 80, 60), Phaser.Geom.Rectangle.Contains, true);
+                    bg.on('pointerdown', () => this.playCardAction(idx));
+                    bg.on('pointerover', () => bg.lineStyle(2, 0x00ff66, 1).strokeRoundedRect(-40, -30, 80, 60, 8));
+                    bg.on('pointerout', () => bg.lineStyle(1.5, 0x8c6d58, 0.4).strokeRoundedRect(-40, -30, 80, 60, 8));
+                } else {
+                    cardGroup.setAlpha(0.5);
+                }
             } else {
                 cardGroup.setAlpha(0.5);
             }
@@ -627,9 +710,18 @@ export default class GameScene extends Phaser.Scene {
         });
     }
 
-    playCardAction(cardIndex) {
+    playCardAction(cardIndex, isNetworkTriggered = false) {
+        if (!isNetworkTriggered && this.isMultiplayer && this.game.currentPlayerIndex !== this.localPlayerIndex) return;
+
         const result = this.game.playCard(this.game.currentPlayerIndex, cardIndex);
         if (result.success) {
+            if (!isNetworkTriggered && this.isMultiplayer) {
+                this.sendNetworkAction({
+                    action: 'PLAY_CARD',
+                    cardIndex: cardIndex
+                });
+            }
+
             this.showEventModal('CARD PLAYED', result.msg, () => {
                 this.updateUIStatus();
             });
@@ -760,6 +852,14 @@ export default class GameScene extends Phaser.Scene {
                 const randomCard = CARD_TEMPLATES[Math.floor(Math.random() * CARD_TEMPLATES.length)];
                 player.money -= 5000;
                 player.drawCard(randomCard);
+                
+                if (this.isMultiplayer) {
+                    this.sendNetworkAction({
+                        action: 'BUY_SHOP_CARD',
+                        cardId: randomCard.id
+                    });
+                }
+
                 this.modalOverlay.setVisible(false);
                 this.showEventModal('CARD PURCHASED', `You bought:\n\n"${randomCard.name}"\n(${randomCard.desc})`, () => {
                     this.completeTurnEnding();
@@ -780,10 +880,17 @@ export default class GameScene extends Phaser.Scene {
 
         if (canSell) {
             sellBtn.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-                // Open a sub-select overlay or just sell the first card in hand for simplicity
                 const card = player.cards[0];
                 player.money += 2500;
                 player.cards.splice(0, 1);
+
+                if (this.isMultiplayer) {
+                    this.sendNetworkAction({
+                        action: 'SELL_SHOP_CARD',
+                        cardIndex: 0
+                    });
+                }
+
                 this.modalOverlay.setVisible(false);
                 this.showEventModal('CARD SOLD', `You sold "${card.name}" back to the bank for $2,500.`, () => {
                     this.completeTurnEnding();
@@ -802,6 +909,11 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5)
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', () => {
+              if (this.isMultiplayer) {
+                  this.sendNetworkAction({
+                      action: 'SKIP_SHOP'
+                  });
+              }
               this.modalOverlay.setVisible(false);
               this.completeTurnEnding();
           });
@@ -838,7 +950,16 @@ export default class GameScene extends Phaser.Scene {
                 }).setOrigin(0.5)
                   .setInteractive({ useHandCursor: true })
                   .on('pointerdown', () => {
-                      player.buyProperty(currentPlayer.currentNodeIndex, idx, this.game.board);
+                      player.buyProperty(node.id, idx, this.game.board);
+                      
+                      if (this.isMultiplayer) {
+                          this.sendNetworkAction({
+                              action: 'BUY_PROPERTY',
+                              nodeIndex: node.id,
+                              propertyIndex: idx
+                          });
+                      }
+
                       this.modalOverlay.setVisible(false);
                       this.completeTurnEnding();
                   });
@@ -858,6 +979,11 @@ export default class GameScene extends Phaser.Scene {
         }).setOrigin(0.5)
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', () => {
+              if (this.isMultiplayer) {
+                  this.sendNetworkAction({
+                      action: 'SKIP_PROPERTY'
+                  });
+              }
               this.modalOverlay.setVisible(false);
               this.completeTurnEnding();
           });
@@ -892,5 +1018,77 @@ export default class GameScene extends Phaser.Scene {
             graphics.lineTo(x1 + stepX * endDist, y1 + stepY * endDist);
         }
         graphics.strokePath();
+    }
+
+    setupNetworkListeners() {
+        if (!this.conn) return;
+
+        this.conn.off('data');
+        this.conn.on('data', (data) => {
+            console.log('GameScene received network action:', data);
+            this.handleNetworkAction(data);
+        });
+
+        this.conn.on('close', () => {
+            console.warn('Opponent connection closed.');
+            alert('Opponent disconnected from match.');
+            this.registry.destroy();
+            this.scene.start('IntroScene');
+        });
+    }
+
+    handleNetworkAction(data) {
+        const currentPlayer = this.game.players[this.game.currentPlayerIndex];
+        
+        switch (data.action) {
+            case 'ROLL_DICE':
+                // Remote rolled dice
+                this.rollDicePhase(data.rollValue, data.blackwoodEvent, true);
+                break;
+            case 'MOVE_STEP':
+                // Remote moved a step
+                this.handleStepMove(data.direction, true);
+                break;
+            case 'BUY_PROPERTY':
+                // Remote bought a property
+                currentPlayer.buyProperty(data.nodeIndex, data.propertyIndex, this.game.board);
+                this.updateUIStatus();
+                this.showEventModal('OPPONENT ACTION', `${currentPlayer.name} bought a property in ${this.game.board.findNodeById(data.nodeIndex).name}!`);
+                break;
+            case 'SKIP_PROPERTY':
+                this.showEventModal('OPPONENT ACTION', `${currentPlayer.name} chose not to buy any property.`);
+                break;
+            case 'PLAY_CARD':
+                this.playCardAction(data.cardIndex, true);
+                break;
+            case 'BUY_SHOP_CARD': {
+                const card = CARD_TEMPLATES.find(c => c.id === data.cardId);
+                currentPlayer.money -= 5000;
+                currentPlayer.drawCard(card);
+                this.updateUIStatus();
+                this.showEventModal('OPPONENT ACTION', `${currentPlayer.name} bought "${card.name}" from the card shop.`);
+                break;
+            }
+            case 'SELL_SHOP_CARD': {
+                const card = currentPlayer.cards[data.cardIndex];
+                currentPlayer.money += 2500;
+                currentPlayer.cards.splice(data.cardIndex, 1);
+                this.updateUIStatus();
+                this.showEventModal('OPPONENT ACTION', `${currentPlayer.name} sold "${card.name}" to the card shop.`);
+                break;
+            }
+            case 'SKIP_SHOP':
+                this.showEventModal('OPPONENT ACTION', `${currentPlayer.name} visited the Card Shop but made no transactions.`);
+                break;
+            case 'END_TURN':
+                this.completeTurnEnding(true);
+                break;
+        }
+    }
+
+    sendNetworkAction(msg) {
+        if (this.conn && this.conn.open) {
+            this.conn.send(msg);
+        }
     }
 }
